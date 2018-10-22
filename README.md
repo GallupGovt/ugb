@@ -7,7 +7,8 @@ Data for SAPIR are available by request to Matt Hoover (<matt_hoover@gallup.com>
 ## Setup
 The majority of SAPIR is programmed in Python (3.x), with some modeling undertaken in R. Both are freely available for install. Python requirements are detailed in the `requirements.txt` file and should be installed prior to proceeding. Note, Gallup **highly recommends** the use of a virtual environment, at least for the Python portion, for code execution.
 
-## Getting articles
+## Data acquisition
+### Getting articles
 The Python script, `get_data.py` utilizes the classes defined in `__init__.py` to scrape data from various news sources. *These scrapers are all functional as of 18 October 2018.* In the future, based on site architecture changes, the scrapers may need to be adjusted. This can be done via the `__init__.py` file; feel free to submit a pull request to the repository if you update a scraper class.
 
 The call for data involves two required arguments: a site to scrape and a date range for which to run the scraper over. Currently, four scrapers are available for [Huffington Post](https://www.huffintonpost.com), [Breitbart News](https://www.breitbart.com), [The Guardian](https://www.guardian.com), and [The New York Post](https://www.nypost.com). Dates should be specified as YYYY-MM-DD. See below for an example call:
@@ -16,11 +17,11 @@ The call for data involves two required arguments: a site to scrape and a date r
 $ python get_data.py -s nyp -d 2015-07-01 2015-07-31
 ```
 
-## Getting comments
-The 'make_comments.py' is currently configured to obtain and process comments for Breitbart and Guardian articles for a selected topic.
+### Getting comments
+The `make_comments.py` is currently configured to obtain and process comments for Breitbart and Guardian articles for a selected topic.
 
 Dependencies:
-* This script depends on the outputs from the 'get_data.py' module, which are used as inputs to obtain the comments
+* This script depends on the outputs from the `get_data.py` module, which are used as inputs to obtain the comments
 * We use the Google CustomSearch API to select articles related to a selected topic, and provide instructions for obtaining credentials below:
   * Create a [free Google account](https://cloud.google.com/billing/docs/how-to/manage-billing-account)
   * Navigate to the [Google CustomSearch page](https://cse.google.com/cse/) and [follow the instructions](https://developers.google.com/custom-search/docs/tutorial/creatingcse) to create a custom API
@@ -28,19 +29,19 @@ Dependencies:
   * Create a 'config.py' file in the 'src' directory; refer to the config_example.py for an illustration
   * Input the Google CustomSearch cx and developerKey variables, as strings, into the config.py file you created.
 
-Run 'make_comments.py' using the terminal command 'python make_comments.py', which imports modules from the 'src' directory and does the following:
+Run `make_comments.py` using the terminal command `python make_comments.py`, which imports modules from the 'src' directory and does the following:
 * Breitbart comment data
   * Make BLM keywords for Breitbart article classification
   * Get comments
-  * Process comments 
+  * Process comments
 * Guardian comment data
   * Classify Guardian articles
   * Get Guardian comments
   * Process Guardian comments
 
-Outputs are saved in the 'data' directory, and these are used as inputs for the modeling routines. 
+Outputs are saved in the 'data' directory, and these are used as inputs for the modeling routines.
 
-## Indexing via Elasticsearch
+### Indexing via Elasticsearch
 SAPIR takes advantage of Elasticsearch for one-time indexing and updating to allow fast querying of data. With the index of articles and comments, data for any range of topics can be queried and returned for analysis without having to load scraped content each time. This should save time and effort for individuals conducting analyses in the long term.
 
 Articles and comments are indexed separately within Elasticsearch, but each is keyed with a URL. Therefore, if one queries articles using particular search terms and then wants to pull associated comments, one could use the URLs extracted from relevant articles to obtain comments. Putting the articles and comments together in an analytic program like Python or R is trivial from there.
@@ -59,7 +60,7 @@ $ python index_es.py -c data/comments comments
 $ python index_es.py -a data articles -c data/comments comments
 ```
 
-## Modeling
+## Data modeling
 Work in progress
 
 ## Conclusion
