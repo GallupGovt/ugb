@@ -16,6 +16,30 @@ The call for data involves two required arguments: a site to scrape and a date r
 $ python get_data.py -s nyp -d 2015-07-01 2015-07-31
 ```
 
+## Getting comments
+The 'make_comments.py' is currently configured to obtain and process comments for Breitbart and Guardian articles for a selected topic.
+
+Dependencies:
+* This script depends on the outputs from the 'get_data.py' module, which are used as inputs to obtain the comments
+* We use the Google CustomSearch API to select articles related to a selected topic, and provide instructions for obtaining credentials below:
+  * Create a [free Google account](https://cloud.google.com/billing/docs/how-to/manage-billing-account)
+  * Navigate to the [Google CustomSearch page](https://cse.google.com/cse/) and [follow the instructions](https://developers.google.com/custom-search/docs/tutorial/creatingcse) to create a custom API
+  * On the [Google CustomSearch page](https://cse.google.com/cse/), indicate your topic ("Search engine keywords" text box), the sites you'd like to search ("Sites to search" table), and under the "Restrict Pages using Schema.org Types" input "NewsArticle" so that we can get search data in the proper format
+  * Create a 'config.py' file in the 'src' directory; refer to the config_example.py for an illustration
+  * Input the Google CustomSearch cx and developerKey variables, as strings, into the config.py file you created.
+
+Run 'make_comments.py' using the terminal command 'python make_comments.py', which imports modules from the 'src' directory and does the following:
+* Breitbart comment data
+  * Make BLM keywords for Breitbart article classification
+  * Get comments
+  * Process comments 
+* Guardian comment data
+  * Classify Guardian articles
+  * Get Guardian comments
+  * Process Guardian comments
+
+Outputs are saved in the 'data' directory, and these are used as inputs for the modeling routines. 
+
 ## Indexing via Elasticsearch
 SAPIR takes advantage of Elasticsearch for one-time indexing and updating to allow fast querying of data. With the index of articles and comments, data for any range of topics can be queried and returned for analysis without having to load scraped content each time. This should save time and effort for individuals conducting analyses in the long term.
 
