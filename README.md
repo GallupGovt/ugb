@@ -25,6 +25,8 @@ Dependencies:
   * Create a [free Google account](https://cloud.google.com/billing/docs/how-to/manage-billing-account)
   * Navigate to the [Google CustomSearch page](https://cse.google.com/cse/) and [follow the instructions](https://developers.google.com/custom-search/docs/tutorial/creatingcse) to create a custom API
   * On the [Google CustomSearch page](https://cse.google.com/cse/), indicate your topic ("Search engine keywords" text box), the sites you'd like to search ("Sites to search" table), and under the "Restrict Pages using Schema.org Types" input "NewsArticle" so that we can get search data in the proper format
+  * Create a 'config.py' file in the 'src' directory; refer to the config_example.py for an illustration
+  * Input the Google CustomSearch cx and developerKey variables, as strings, into the config.py file you created.
 
 Run 'make_comments.py' using the terminal command 'python make_comments.py', which imports modules from the 'src' directory and does the following:
 * Breitbart comment data

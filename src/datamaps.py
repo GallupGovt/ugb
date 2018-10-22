@@ -1,38 +1,133 @@
-blm_kws = [' riot', '#justice4jamar', 'akai gurley',
-       'akiel denkins', 'alfred olango', 'alicia garza',
-       'all lives matter', 'alton sterling', 'amber guyger',
-       'anand badgujar', 'anthem', 'anthony smith', 'antifa',
-       'antwon rose', 'bettie jones', 'black activist', 'black boy',
-       'black communit', 'black girl', 'black lives', 'black man',
-       'black men', 'black organizing for leadership & dignity',
-       'black woman', 'black women', 'blacklivesmatter', 'blm',
-       'blue lives', 'botham jean', 'botham shem jean', 'brendon glenn',
-       'brentley vinson', 'brutality', 'candace owens', 'charly keunang',
-       'christian taylor', 'christopher manney', 'civil rights',
-       'cop shooting', 'daniel pantaleo', 'danny ray thomas',
-       'dante parker', 'darren wilson', 'dejuan guillory',
-       'deray mckesson', 'dontre hamilton', 'eric garner', 'eric harris',
-       'erica garner', 'ezell ford', 'ferguson', 'frank garmback',
-       'freddie gray', 'gregory gunn', "i can't breathe", 'jamar clark',
-       'jason kessler', 'jason stockley', 'jason van dyke', 'jerame reid',
-       'jeremy mcdole', 'jeronimo yanez', 'john conyers', 'john crawford',
-       'johnetta elzie', 'jonathan ferrell', 'jordan baker',
-       'jordan edwards', 'joshua colclough', 'kaepernick',
-       'kajieme powell', 'kanye', 'keith lamont scott', 'kendrec mcdade',
-       'kerrick', 'kneel', 'laquan mcdonald', 'larry jackson',
-       'manslaughter', 'manuel loggins', 'mario woods', 'mark rine',
-       'michael brown', 'michael rosfeld', 'michael slager', 'occupy',
-       'opal tometi', 'patrisse cullors', 'peter liang',
-       'philando castile', 'police protest', 'police shooting',
-       'protest against police', 'protests against police',
-       'quintonio legrier', 'raised a fist', 'ramarley graham',
-       'renisha mcbride', 'richard haste', 'richard spencer',
-       'robert bates', 'robert white', 'roy oliver', 'rumain brisbon',
-       'sam dubose', 'samuel dubose', 'sandra bland', 'sharpton',
-       'shaun king', 'stand your ground', 'stephen rankin',
-       'stephon clark', 'tamir rice', 'tef poe', 'terence crutcher',
-       'terrence sterling', 'timothy loehmann', 'tony robinson',
-       'took a knee', 'trayvon', 'unrest', 'victor white', 'walter scott',
-       'wendell allen', 'william chapman', 'zimmerman', 'sterling brown', 
-       'racial sensitivity training', 'kalief browder', 'ja\'mal green',
-       'antwon rose', 'iesha evans', 'shayne holland']
+blm_kws = [' riot'
+           ,'#justice4jamar'
+           ,'akai gurley'
+           ,'akiel denkins'
+           ,'alfred olango'
+           ,'alicia garza'
+           ,'all lives matter'
+           ,'alton sterling'
+           ,'amber guyger'
+           ,'anand badgujar'
+           ,'anthem'
+           ,'anthony smith'
+           ,'antifa'
+           ,'antwon rose'
+           ,'bettie jones'
+           ,'black activist'
+           ,'black boy'
+           ,'black communit'
+           ,'black girl'
+           ,'black lives'
+           ,'black man'
+           ,'black men'
+           ,'black organizing for leadership & dignity'
+           ,'black woman'
+           ,'black women'
+           ,'blacklivesmatter'
+           ,'blm'
+           ,'blue lives'
+           ,'botham jean'
+           ,'botham shem jean'
+           ,'brendon glenn'
+           ,'brentley vinson'
+           ,'brutality'
+           ,'candace owens'
+           ,'charly keunang'
+           ,'christian taylor'
+           ,'christopher manney'
+           ,'civil rights'
+           ,'cop shooting'
+           ,'daniel pantaleo'
+           ,'danny ray thomas'
+           ,'dante parker'
+           ,'darren wilson'
+           ,'dejuan guillory'
+           ,'deray mckesson'
+           ,'dontre hamilton'
+           ,'eric garner'
+           ,'eric harris'
+           ,'erica garner'
+           ,'ezell ford'
+           ,'ferguson'
+           ,'frank garmback'
+           ,'freddie gray'
+           ,'gregory gunn'
+           ,"i can't breathe"
+           ,'jamar clark'
+           ,'jason kessler'
+           ,'jason stockley'
+           ,'jason van dyke'
+           ,'jerame reid'
+           ,'jeremy mcdole'
+           ,'jeronimo yanez'
+           ,'john conyers'
+           ,'john crawford'
+           ,'johnetta elzie'
+           ,'jonathan ferrell'
+           ,'jordan baker'
+           ,'jordan edwards'
+           ,'joshua colclough'
+           ,'kaepernick'
+           ,'kajieme powell'
+           ,'kanye'
+           ,'keith lamont scott'
+           ,'kendrec mcdade'
+           ,'kerrick'
+           ,'kneel'
+           ,'laquan mcdonald'
+           ,'larry jackson'
+           ,'manslaughter'
+           ,'manuel loggins'
+           ,'mario woods'
+           ,'mark rine'
+           ,'michael brown'
+           ,'michael rosfeld'
+           ,'michael slager'
+           ,'occupy'
+           ,'opal tometi'
+           ,'patrisse cullors'
+           ,'peter liang'
+           ,'philando castile'
+           ,'police protest'
+           ,'police shooting'
+           ,'protest against police'
+           ,'protests against police'
+           ,'quintonio legrier'
+           ,'raised a fist'
+           ,'ramarley graham'
+           ,'renisha mcbride'
+           ,'richard haste'
+           ,'richard spencer'
+           ,'robert bates'
+           ,'robert white'
+           ,'roy oliver'
+           ,'rumain brisbon'
+           ,'sam dubose'
+           ,'samuel dubose'
+           ,'sandra bland'
+           ,'sharpton'
+           ,'shaun king'
+           ,'stand your ground'
+           ,'stephen rankin'
+           ,'stephon clark'
+           ,'tamir rice'
+           ,'tef poe'
+           ,'terence crutcher'
+           ,'terrence sterling'
+           ,'timothy loehmann'
+           ,'tony robinson'
+           ,'took a knee'
+           ,'trayvon'
+           ,'unrest'
+           ,'victor white'
+           ,'walter scott'
+           ,'wendell allen'
+           ,'william chapman'
+           ,'zimmerman'
+           ,'sterling brown'
+           ,'racial sensitivity training'
+           ,'kalief browder'
+           ,'ja\'mal green'
+           ,'antwon rose'
+           ,'iesha evans'
+           ,'shayne holland']

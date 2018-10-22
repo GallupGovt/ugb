@@ -33,7 +33,7 @@ def main():
 
     today_dt = datetime.date.today()
     yesterday_dt = today_dt - datetime.timedelta(days=1)
-    dates_ds = pd.date_range('2013-07-01', yesterday_dt)
+    dates_ds = pd.date_range(inputs.start_date, inputs.end_date)
     dates = [str(x.date()).replace('-', '/') for x in list(dates_ds)]
     overwrite = inputs.overwrite
     site = 'guardian'

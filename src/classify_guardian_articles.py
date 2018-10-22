@@ -1,6 +1,7 @@
 # coding: utf-8
 
 import config
+import inputs
 import utilities
 from utilities import preview
 import os
@@ -12,7 +13,7 @@ import getpass
 from googleapiclient.discovery import build
 
 
-dates_ds = pd.date_range('2013-07-01', yesterday_dt)
+dates_ds = pd.date_range(inputs.start_date, inputs.end_date)
 dates = [str(x.date()).replace('-', '/') for x in list(dates_ds)]
 overwrite = inputs.overwrite
 site = 'guardian'

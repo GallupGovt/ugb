@@ -32,7 +32,7 @@ import numpy as np
 
 today_dt = datetime.date.today()
 yesterday_dt = today_dt - datetime.timedelta(days=1)
-dates_ds = pd.date_range('2013-07-01', yesterday_dt)
+dates_ds = pd.date_range(inputs.start_date, inputs.end_date)
 dates = [str(x.date()).replace('-', '/') for x in list(dates_ds)]
 site = 'breitbart'
 articles_dir = utilities.data_2018_dir
@@ -49,7 +49,7 @@ def instantiate_driver(wait=10, url='https://google.com', headless=False):
         chrome_options.add_argument("--headless")
         chrome_options.add_argument('--disable-gpu')
     chrome_options.add_argument('--no-sandbox')
-    driver_path = os.path.join(r'G:\Strengths_Reporting\code\src\tools', 'chromedriver.exe')
+    driver_path = utilities.chromedriver_path
     driver = webdriver.Chrome(driver_path, chrome_options=chrome_options)
     driver.get(url)
     driver.maximize_window()

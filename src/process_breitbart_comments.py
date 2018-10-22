@@ -17,8 +17,6 @@ import calendar
 import re
 
 
-
-
 class ArticlePosts:
     """Process and organize comments data for one article."""
     
