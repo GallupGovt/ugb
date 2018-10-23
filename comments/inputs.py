@@ -1,3 +1,5 @@
+# coding: utf-8
+
 abs_path_data_dir = None # 'input/absolute/path/to/your/data/directory'
 overwrite = True
 
