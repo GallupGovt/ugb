@@ -1,5 +1,12 @@
-config.py
 # folders
 data/
 ugb/
 __pycache__
+
+# files
+articles.zip
+comments.zip
+config.py
+
+# hlm data files
+hlm/*.csv
