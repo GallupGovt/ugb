@@ -1,4 +1,5 @@
 
+import argparse
 import json
 import os
 
@@ -9,108 +10,125 @@ import pandas as pd
 from unidecode import unidecode
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-# 
-# Loop through raw UGB JSON files and pull out texts for analysis in R with
-# tex2vec package.
-# 
+# DIR = 'W:/DARPA_UGB/CONSULTING/MR/2018/Data/BLM/PROCESSED/PARSED/2nd_iteration'
+# SOURCE = 'guardian'
 
-DIR = 'C:/Users/ben_ryan/Documents/DARPA UGB'
-bfiles = [file for file in os.listdir(DIR) if ('json' in file and 'breitbart' in file)]
-bcomments = []
-barts = []
+def getSentiment(df, field, analyzer):
+    l = lambda x: pd.Series(analyzer.polarity_scores(x))
+    sent = df[field].apply(l)
+    sent.columns = [field + '_sent_' + x for x in sent.columns]
+    df = pd.concat([df, sent], axis=1)
 
-#
-# Process all comments into one DataFrame
-# 
-
-for file in bfiles:
-    file = open('{}/{}'.format(DIR, file), 'r')
-    data = json.load(file)
-
-    for date in data.keys():
-        for i, article in enumerate(data[date]):
-            title = article['title']
-            author = article['author']
-            art_id = '.'.join([date,str(i)])
-
-            bcomments = bcomments + [(date, 
-                                      title,
-                                      author,
-                                      art_id,
-                                      comment['commenter'], 
-                                      comment['parent_commenter'], 
-                                      comment['comment'], 
-                                      comment['upvotes']) for comment in article['parsed_comments']]
-
-bc = pd.DataFrame(bcomments)
-bc.columns = ['date',
-              'art_title',
-              'art_author',
-              'art_id',
-              'commenter',
-              'parent',
-              'comment_txt',
-              'upvotes']
-
-#
-# Process all articles into one DataFrame
-# 
-
-for file in bfiles:
-    file = open('{}/{}'.format(DIR, file), 'r')
-    data = json.load(file)
-
-    for date in data.keys():
-            barts = barts + [(date, 
-                              '.'.join([date,str(i)]),
-                              article['title'], 
-                              article['author'],
-                              len(article['parsed_comments']),
-                              article['fulltext']) for i, article in enumerate(data[date])]
-
-barts = pd.DataFrame(barts)
-barts.columns = ['date','art_id','art_title','art_author','art_comments','art_text']
-
-#
-# Transliterate Unicode characters to ASCII for more coherent and
-# predictable analyis later in R. 
-#
-
-barts.art_text = barts.art_text.apply(lambda x: unidecode(x))
-bc.comment_txt = bc.comment_txt.apply(lambda x: unidecode(x))
-
-#
-# Perform VADER Sentiment Analysis on article titles, text, and comment text
-# 
-
-analyzer = SentimentIntensityAnalyzer()
-
-title_sents = barts.art_title.apply(lambda x: pd.Series(analyzer.polarity_scores(x)))
-title_sents.columns = ["title_sent_"+x for x in title_sents.columns]
-
-art_sents = barts.art_text.apply(lambda x: pd.Series(analyzer.polarity_scores(x)))
-art_sents.columns = ["art_sent_"+x for x in art_sents.columns]
-
-barts = pd.concat([barts, title_sents, art_sents], axis=1)
+    return df
 
 
-comm_sents = bc.comment_txt.apply(lambda x: pd.Series(analyzer.polarity_scores(x)))
-comm_sents.columns = ["comm_sent_"+x for x in comm_sents.columns]
+def run(args_dict):
+    # 
+    # Loop through raw UGB JSON files and pull out text and metadata
+    # for analysis.
+    # 
 
-bc = pd.concat([bc, comm_sents], axis=1)
+    SOURCE = args_dict['source']
+    DIR = args_dict['directory']
+    verbose = args_dict['verbose']
 
-#
-# Save dataframes
-# 
+    files = [file for file in os.listdir(DIR) if 
+                ('json' in file and SOURCE in file)]
+    comments = []
+    arts = []
 
-barts.to_csv('{}/breitbart_articles.csv'.format(DIR))
-bc.to_csv('{}/breitbart_comments.csv'.format(DIR))
+    #
+    # Process all articles and comments into lists of tuples
+    # 
 
-#
-# Save text for training embeddings separately
-# 
+    for file in files:
+        file = open('{}/{}'.format(DIR, file), 'r')
+        data = json.load(file)
 
-b_corpus = pd.concat([barts.art_text, bc.comment_txt])
-b_corpus.to_csv('{}/breitbart_texts.csv'.format(DIR))
+        for date in data.keys():
+            for i, article in enumerate(data[date]):
+                art_id = '.'.join([date,str(i)])
+                title = article['title']
+                auth = article['author']
+                art_cmts = article['parsed_comments']
+                art_txt = article['fulltext']
 
+                arts = arts + [(date, 
+                                art_id,
+                                title,
+                                auth,
+                                len(art_cmts),
+                                art_txt)]
+
+                comments = comments + [(art_id,
+                                        cmt['commenter_id'], 
+                                        cmt['comment_reply_to_id'], 
+                                        cmt['comment'], 
+                                        cmt['upvotes']) for cmt in art_cmts]
+
+    #
+    # Convert lists of tuples to DataFrames
+    # 
+
+    comments = pd.DataFrame(comments)
+    comments.columns = ['art_id',
+                        'commenter',
+                        'parent',
+                        'comment_txt',
+                        'upvotes']
+
+    arts = pd.DataFrame(arts)
+    arts.columns = ['date',
+                    'art_id',
+                    'art_title',
+                    'art_author',
+                    'art_comments',
+                    'art_text']
+
+    #
+    # Transliterate Unicode characters to ASCII for more coherent and
+    # predictable analyis later in R. 
+    #
+
+    arts.art_text = arts.art_text.apply(lambda x: unidecode(x))
+    comments.comment_txt = comments.comment_txt.apply(lambda x: unidecode(x))
+
+    #
+    # Perform VADER Sentiment Analysis on article titles, text, and comment text
+    # 
+
+    analyzer = SentimentIntensityAnalyzer()
+
+    arts = getSentiment(arts, 'art_title', analyzer)
+    arts = getSentiment(arts, 'art_text', analyzer)
+
+    comments = getSentiment(comments, 'comment_txt', analyzer)
+
+    #
+    # Save dataframes
+    # 
+
+    arts.to_csv('{}/{}_articles.csv'.format(DIR, SOURCE))
+    comments.to_csv('{}/{}_comments.csv'.format(DIR, SOURCE))
+
+    #
+    # Save text for training embeddings separately
+    # 
+
+    corpus = pd.concat([arts.art_text, comments.comment_txt])
+    corpus.to_csv('{}/{}_texts.csv'.format(DIR,SOURCE))
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Conversion of scraped '
+                        'articles and comments from JSON storage to CSV.')
+    parser.add_argument('-d', '--directory', required=True,
+                        help='Desired working directory')
+    parser.add_argument('-s', '--source', required=True,
+                        help='Name of the media source')
+    parser.add_argument('-v', '--verbose', action="store_true",
+                        help='Output progress reporting.')
+    args_dict = vars(parser.parse_args())
+
+    run(args_dict)
 

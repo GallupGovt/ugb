@@ -3,28 +3,41 @@
 # R functions and packages for featurizing text with GloVe word embeddings
 # 
 
-library(data.table)
-library(dplyr)
-library(text2vec)
-library(iterators)
-library(Rtsne)
-library(NLP)
-library(openNLP)
-library(doParallel)
-library(foreach)
+getPackages <- function (list.of.packages) {
+#
+# Takes a list or vector of package names and loads them, installing first if they 
+# are not already installed.
+# 
+  new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+
+  if(length(new.packages)) install.packages(new.packages)
+  lapply(list.of.packages,require,character.only=T)
+}
 
 
-word_tokenizer <- function(txt, sta, wta) {
-    #
-    # Apply Stanford Tokenizer to txt, returning a vector of char() tokens
-    # 
+pks = c('data.table','dplyr','text2vec','Rtsne','quanteda','doParallel','foreach')
+getPackages(pks)
 
-    words <- NLP::annotate(txt, list(sta, wta)) %>% 
-    lapply(function(x) ifelse(x$type=='word',substr(txt,x$start,x$end),'')) %>%
-    unlist()
-    words <- words[words!='']
 
-    return(words)
+resetCluster <- function(pks) {
+    if(dim(showConnections())[1]>0) {
+        stopImplicitCluster()
+        gc()
+    }
+
+    registerDoParallel(detectCores()-1)
+    x <- foreach(i=1:detectCores()-1, .packages=pks) %dopar% { return(1) }
+}
+
+
+loadGloveModel <- function(path) {
+  wv = fread(path, header=FALSE)
+  terms <- wv$V1
+  wv[,V1:=NULL]
+  wv <- data.matrix(wv)
+  rownames(wv) <- terms
+  
+  return(wv)
 }
 
 
@@ -34,28 +47,38 @@ trainEmbeddings <- function(docs,
                             word_vectors_size=300, 
                             x_max=100, 
                             n_iter=100, 
-                            convergence_tol=0.001, 
-                            alpha=0.05) {
-    sta <- Maxent_Sent_Token_Annotator()
-    wta <- Maxent_Word_Token_Annotator()
-    docs <- tolower(docs)
+                            convergence_tol=0.01, 
+                            learning_rate=0.05,
+                            verbose=FALSE) {
+    toks <- tokens(tolower(docs))
+    feats <- dfm(toks, verbose=verbose) %>% 
+        dfm_trim(min_termfreq=term_count_min) %>%
+        featnames()
+    toks <- tokens_select(toks, feats, 
+                       selection='keep',
+                       valuetype='fixed',
+                       padding=TRUE,
+                       case_insensitive=FALSE,
+                       verbose=verbose)
+    my_fcm <- fcm(toks, 
+                  context="window",
+                  window=skip_grams_window,
+                  count="weighted",
+                  weights=1/(1:skip_grams_window),
+                  tri=TRUE)
 
-    it <- itoken_parallel(docs, 
-                          tokenizer=function(x) word_tokenizer(x, sta, wta), 
-                          progressbar=TRUE)
-    vocab <- create_vocabulary(it)
+    glove <- GlobalVectors$new(word_vectors_size=word_vectors_size,
+                               vocabulary=featnames(my_fcm),
+                               x_max=x_max,
+                               learning_rate=learning_rate)
 
-    pruned_vocab <- prune_vocabulary(vocab, term_count_min = term_count_min)
-    vectorizer = vocab_vectorizer(pruned_vocab)
-    tcm = create_tcm(it, vectorizer, skip_grams_window = skip_grams_window)
+    if(verbose) print('Fitting GloVe model...')
 
-    glove = GlobalVectors$new(word_vectors_size=word_vectors_size, 
-                              vocabulary = pruned_vocab, 
-                              x_max = x_max, 
-                              learning_rate = alpha)
-    wv_main = glove$fit_transform(tcm, 
-                                  n_iter = n_iter, 
-                                  convergence_tol = convergence_tol, )
+    wv_main = glove$fit_transform(my_fcm,
+                                  n_iter=n_iter,
+                                  convergence_tol=convergence_tol)
+
+    if(verbose) print('Done.')
 
     # Combine context and target word vectors in the same manner as
     # original GloVe research 
@@ -65,35 +88,31 @@ trainEmbeddings <- function(docs,
 }
 
 
-gloved <- function(tokens, wv, sta, wta) {
+gloved <- function(tokens, wv) {
     #
     # Average word embeddings for a text; ignore 
     # out-of-vocabulary words 
     # 
 
     tokens <- tokens[tokens %in% rownames(wv)]
-    text <- wv[tokens, , drop=FALSE]
+    embeds <- wv[tokens, , drop=FALSE]
 
-    vector <- colMeans(text)
+    vector <- colMeans(embeds)
 
     return(vector)
 }
 
 
 getTokens <- function(txts){
-    tokens <- foreach(i = 1:length(txts), .inorder=TRUE, .export=c('word_tokenizer'),
-                .packages = c('NLP','openNLP','dplyr'),
-                .multicombine = TRUE, 
+    tokens <- foreach(i = 1:length(txts), .inorder=TRUE, .multicombine = TRUE, 
                 .options.multicore = list(preschedule = FALSE)) %dopar% {
-            word_tokenizer(txts[i], 
-                           Maxent_Sent_Token_Annotator(),
-                           Maxent_Word_Token_Annotator())
+            tolower(unlist(quanteda::tokens(txts[i])))
         }
     return(tokens)
 }
 
 
-deriveBias <- function(pairs, wv=word_vectors, method='mean', diag=FALSE) {
+deriveBias <- function(pairs, wv, method='pca', diag=FALSE) {
     #
     # Give a set of word pairs, calculate the average of their
     # differences as a "bias" vector.
@@ -117,46 +136,27 @@ deriveBias <- function(pairs, wv=word_vectors, method='mean', diag=FALSE) {
         }
     } else if(method=='mean') {
         b <- matrix(colMeans(diffs), 1, 300)
+    } else {
+        print('No aggregation method supplied.')
+        b = NULL
     }
 
     return(b)
 }
 
 
-biasComponent <- function(w1, b, wv=NULL, metric='pos') {
-    #
-    # Calculates the projection of word w1 on the bias direction b
-    # 
+calcBiasThemes <- function(tokens, bias, wv) {
+  b <- lapply(tokens, function(x) avgBias(x, bias, wv))
+  b <- unlist(b)
 
-    if(class(w1) == 'character') {
-        w1 <- wv[w1,,drop=FALSE]
-    }
-
-    result <- as.numeric(w1 %*% t(b))/(sum(b**2) * b)
-
-    if(metric == 'pos') {
-        result <- sim2(result, w1, method='cosine', norm='l2')
-    } else if(metric=='neg') {
-        result <- -sim2(result, w1, method='cosine', norm='l2')
-    } else if(metric=='abs') {
-        result <- abs(sim2(result, w1, method='cosine', norm='l2'))
-    } else {
-        print('Unknown metric')
-        return()
-    }
-    
-    return(result)
+  return(b)
 }
 
 
 avgBias <- function(tokens, bias, wv) {
-
-
     tokens <- tokens[tokens %in% rownames(wv)]
     embeddings <- wv[tokens, , drop=FALSE]
-    embeddings <- lapply(1:nrow(embeddings), 
-                         function(x) biasComponent(embeddings[x,,drop=FALSE], 
-                                                   bias))
-    bias <- mean(unlist(embeddings))
+    bias <- sim2(embeddings, bias, method='cosine', norm='l2')
+    bias <- mean(bias)
     return(bias)
 }

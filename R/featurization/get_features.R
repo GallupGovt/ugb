@@ -1,250 +1,311 @@
-
+#!/usr/bin/env Rscript
 
 #
 # Featurization script
 # 
 
-setwd("C:/users/ben_ryan/documents/git/ugb/R/featurization")
+getPackages <- function (list.of.packages) {
+#
+# Takes a list or vector of package names and loads them, installing first if they 
+# are not already installed.
+# 
+  new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+
+  if(length(new.packages)) install.packages(new.packages)
+  lapply(list.of.packages,require,character.only=T)
+}
+
+pks = c('optparse')
+
+getPackages(pks)
+
+option_list = list(
+  make_option(c("-a", "--articles"), type="character", default="articles.csv", 
+              help="file with articles data [default= %default]", metavar="character"),
+  make_option(c("-c", "--comments"), type="character", default="comments.csv", 
+              help="file with comments data [default= %default]", metavar="character"),
+  make_option(c("-d", "--directory"), type="character", default=NULL, 
+              help="working directory", metavar="character"),
+  make_option(c("-s", "--source"), type="character", default=NULL, 
+              help="name of the articles/comments source", metavar="character"),
+  make_option(c("-t", "--texts"), type="character", default="texts.csv", 
+              help="file with combined text data [default= %default]", metavar="character"),
+  make_option(c("-w", "--word_embeddings"), type="character", default="texts.csv", 
+              help="file with combined text data [default= %default]", metavar="character"),
+  make_option(c("-v", "--verbose"), action="store_true", default=TRUE,
+              help="Print extra output [default]")
+)
+
+opt = parse_args(OptionParser(option_list=option_list))
+
+setwd(opt$directory)
 source("clustering.R")
 source('glove_analysis.R')
+
+#
+# Export packages to parallel nodes
+# 
+
+resetCluster(pks)
+
+if (opt$verbose) {
+  print('Environment instantiated.')
+}
+
+corpus <- fread(opt$texts, header=FALSE)
+arts <- fread(opt$articles)
+comments <- fread(opt$comments)
+SOURCE <- opt$source
+
+
+if (opt$verbose) {
+  print('Articles and comments datasets loaded.')
+}
+
+#
+# Load word embeddings, or if they don't exist 
+# get the raw text data for embedding training
+# 
+
+if(!is.null(opt$word_embeddings)){
+  wv = loadGloveModel(opt$word_embeddings)
+} else {
+  wv = trainEmbeddings(corpus$V2, verbose=opt$verbose)
+  write.table(wv,
+              paste0(SOURCE,'_corpus_embeddings.txt'),
+              col.names=FALSE,
+              quote=FALSE,
+              fileEncoding='utf-8')
+}
+
 source('bias_themes_analysis.R')
 
-registerDoParallel(detectCores())
+if (opt$verbose) {
+  if (exists(opt$word_embeddings)) {
+    print(paste0('Word embeddings loaded from ', opt$word_embeddings))
+  } else {
+    print(paste0('Word embeddings trained, and saved to ',
+                 getwd(),'/',SOURCE,'_corpus_embeddings.txt'))
+  }
+}
 
 #
-# Get the raw text data for embedding training
+# Begin feature extraction from articles and comments datasets:
+# 
+# 
+# 1. Derive bias component vectors
 # 
 
-b_corp <- fread('C:/users/ben_ryan/documents/darpa ugb/breitbart_texts.csv',
-                header=FALSE)
+gender_bias <- deriveBias(genderPairs, wv=wv, method='pca', diag=TRUE)
+race_bias <- deriveBias(adj_race_names, wv=wv, diag=TRUE)
+power_bias <- deriveBias(powerPairs, wv=wv, method='pca', diag=TRUE)
 
-bv = trainEmbeddings(b_corp$V2, alpha=0.05)
-write.table(bv,
-            'breitbart_embeddings_wComments.txt',
-            col.names=FALSE,
-            quote=FALSE,
-            fileEncoding='utf-8')
-
-# To read in again from saved:
-# bv = fread('breitbart_embeddings_wComments.txt', header=FALSE)
-# terms <- bv$V1
-# bv[,V1:=NULL]
-# bv <- data.matrix(bv)
-# rownames(bv) <- terms
-
-#
-#
-# Begin feature extraction from articles and comments datasets
-#
-# 
-
-barts = fread('breitbart_articles.csv') #load breitbart articles
-bcs = fread('breitbart_comments.csv') #load breitbart comments
-
-# 
-# Derive bias component vectors
-# 
-
-gender_bias <- deriveBias(genderPairs, wv=bv, method='pca', diag=TRUE)
-race_bias <- deriveBias(adj_race_names, wv=bv, diag=TRUE)
-power_bias <- deriveBias(powerPairs, wv=bv, method='pca', diag=TRUE)
+if (opt$verbose) {
+  print('Bias component vectors derived.')
+}
 
 #
 # Derive embeddings for articles and article titles, and merge into one 
 # data.table. 
 # 
 
-arts_text_tokens = getTokens(barts$art_text)
-bgloved_arts <- lapply(arts_text_tokens, gloved, wv=bv)
-bgloved_arts <- data.table(do.call(rbind, bgloved_arts))
+arts_text_tokens = getTokens(arts$art_text)
+
+if (opt$verbose) {
+  print('Articles tokenized.')
+}
+
+gloved_arts <- lapply(arts_text_tokens, gloved, wv)
+gloved_arts <- data.table(do.call(rbind, gloved_arts))
+
+if (opt$verbose) {
+  print('Article word embeddings calculated.')
+}
 
 # 
 # Propagate bias components
 #
 
-gender <- foreach(i = 1:nrow(bgloved_arts),
-                  .inorder=TRUE,
-                  .export=c('biasComponent','avgBias','bv','gender_bias','power_bias','race_bias'),
-                  .packages = c('NLP','openNLP','dplyr'),
-                  .multicombine = TRUE, 
-                  .options.multicore = list(preschedule = FALSE)) %dopar% {
-            avgBias(arts_text_tokens[[i]], gender_bias, bv)
-        }
+gloved_arts$gender <- calcBiasThemes(arts_text_tokens, gender_bias, wv)
+gloved_arts$race <- calcBiasThemes(arts_text_tokens, race_bias, wv)
+gloved_arts$power <- calcBiasThemes(arts_text_tokens, power_bias, wv)
 
-bgloved_arts$gender <- unlist(gender)
-
-
-race <- foreach(i = 1:nrow(bgloved_arts),
-                  .inorder=TRUE,
-                  .multicombine = TRUE, 
-                  .options.multicore = list(preschedule = FALSE)) %dopar% {
-            avgBias(arts_text_tokens[[i]], race_bias, bv)
-        }
-
-bgloved_arts$race <- unlist(race)
-
-
-power <- foreach(i = 1:nrow(bgloved_arts),
-                  .inorder=TRUE,
-                  .multicombine = TRUE, 
-                  .options.multicore = list(preschedule = FALSE)) %dopar% {
-            avgBias(arts_text_tokens[[i]], power_bias, bv)
-        }
-
-bgloved_arts$power <- unlist(power)
+if (opt$verbose) {
+  print('Bias components calculated for each article.')
+}
 
 # 
 # Set column names and add article id
 #
 
-names(bgloved_arts) <- paste('art_text_embeddings_',names(bgloved_arts), sep='')
-bgloved_arts$art_id <- barts$art_id
+names(gloved_arts) <- paste('art_text_embeddings_',names(gloved_arts), sep='')
+gloved_arts$art_id <- arts$art_id
 
 #
 # Add in the article metadata (sentiment scores and number of comments per article)
 # 
 
-sent_cols <- c(names(barts)[names(barts) %like% 'sent_'], 'art_comments', 'art_id')
-bgloved_arts <- merge(bgloved_arts, barts[,sent_cols,with=FALSE], by='art_id')
+sent_cols <- c(names(arts)[names(arts) %like% 'sent_'], 'art_comments', 'art_id')
+gloved_arts <- merge(gloved_arts, arts[,sent_cols,with=FALSE], by='art_id')
+
+if (opt$verbose) {
+  print('Article text features complete, beginning with article titles.')
+}
 
 #
 # Okay, now article titles, same deal
 # 
 
-arts_title_tokens = getTokens(barts$art_title)
-bgloved_titles <- lapply(arts_title_tokens, gloved, wv=bv)
-bgloved_titles <- data.table(do.call(rbind, bgloved_titles))
+arts_title_tokens = getTokens(arts$art_title)
+arts_title_tokens <- lapply(arts_title_tokens, tolower)
 
-gender <- foreach(i = 1:nrow(bgloved_titles),
-                  .inorder=TRUE,
-                  .export=c('biasComponent','avgBias','bv','gender_bias','power_bias','race_bias'),
-                  .packages = c('NLP','openNLP','dplyr'),
-                  .multicombine = TRUE, 
-                  .options.multicore = list(preschedule = FALSE)) %dopar% {
-            avgBias(arts_title_tokens[[i]], gender_bias, bv)
-        }
+if (opt$verbose) {
+  print('Article titles tokenized.')
+}
 
-bgloved_titles$gender <- unlist(gender)
+gloved_titles <- lapply(arts_title_tokens, gloved, wv)
+gloved_titles <- data.table(do.call(rbind, gloved_titles))
 
+if (opt$verbose) {
+  print('Title word embeddings calculated.')
+}
 
-race <- foreach(i = 1:nrow(bgloved_titles),
-                  .inorder=TRUE,
-                  .multicombine = TRUE, 
-                  .options.multicore = list(preschedule = FALSE)) %dopar% {
-            avgBias(arts_title_tokens[[i]], race_bias, bv)
-        }
+gloved_titles$gender <- calcBiasThemes(arts_title_tokens, gender_bias, wv)
+gloved_titles$race <- calcBiasThemes(arts_title_tokens, race_bias, wv)
+gloved_titles$power <- calcBiasThemes(arts_title_tokens, power_bias, wv)
 
-bgloved_titles$race <- unlist(race)
-
-
-power <- foreach(i = 1:nrow(bgloved_titles),
-                  .inorder=TRUE,
-                  .multicombine = TRUE, 
-                  .options.multicore = list(preschedule = FALSE)) %dopar% {
-            avgBias(arts_title_tokens[[i]], power_bias, bv)
-        }
-
-bgloved_titles$power <- unlist(power)
+if (opt$verbose) {
+  print('Bias components calculated for each article title.')
+}
 
 # 
 # Set column names and add article id
 #
 
-names(bgloved_titles) <- paste('title_embeddings_',names(bgloved_titles), sep='')
-bgloved_titles$art_id <- barts$art_id
+names(gloved_titles) <- paste('title_embeddings_',names(gloved_titles), sep='')
+gloved_titles$art_id <- arts$art_id
 
 #
 # Goody! Now merge the two together. 
 # 
 
-bgloved_arts <- merge(bgloved_titles, bgloved_arts, by='art_id')
+gloved_arts <- merge(gloved_titles, gloved_arts, by='art_id')
+
+if (opt$verbose) {
+  print('Article and article title features complete, saving progress...')
+}
 
 # 
-# Seems like a good point to save. 
+# Save the dataset created so far. 
 # 
 
-fwrite(bgloved_arts, 'breitbart_articles_features.csv')
+fwrite(gloved_arts, paste0(SOURCE,'_articles_features.csv'))
+
+if (opt$verbose) {
+  print('Done.')
+}
 
 #
 # Now, for the comments!
 # 
 
-comment_txt_tokens = getTokens(bcs$comment_txt)
-bgloved_comments <- lapply(getTokens(bcs$comment_txt), gloved, wv=bv)
-bgloved_comments <- data.table(do.call(rbind, bgloved_comments))
+comment_txt_tokens = getTokens(comments$comment_txt)
 
-gender <- foreach(i = 1:nrow(bgloved_comments),
-                  .inorder=TRUE,
-                  .export=c('biasComponent','avgBias','bv','gender_bias','power_bias','race_bias'),
-                  .packages = c('NLP','openNLP','dplyr'),
-                  .multicombine = TRUE, 
-                  .options.multicore = list(preschedule = FALSE)) %dopar% {
-            avgBias(comment_txt_tokens[[i]], gender_bias, bv)
-        }
+if (opt$verbose) {
+  print('Comments tokenized.')
+}
 
-bgloved_comments$gender <- unlist(gender)
+gloved_comments <- lapply(comment_txt_tokens, gloved, wv=wv)
+gloved_comments <- data.table(do.call(rbind, gloved_comments))
 
+if (opt$verbose) {
+  print('Comment word embeddings calculated.')
+}
 
-race <- foreach(i = 1:nrow(bgloved_comments),
-                  .inorder=TRUE,
-                  .multicombine = TRUE, 
-                  .options.multicore = list(preschedule = FALSE)) %dopar% {
-            avgBias(comment_txt_tokens[[i]], race_bias, bv)
-        }
+gloved_comments$gender <- calcBiasThemes(comment_txt_tokens, gender_bias, wv)
+gloved_comments$race <- calcBiasThemes(comment_txt_tokens, race_bias, wv)
+gloved_comments$power <- calcBiasThemes(comment_txt_tokens, power_bias, wv)
 
-bgloved_comments$race <- unlist(race)
-
-
-power <- foreach(i = 1:nrow(bgloved_comments),
-                  .inorder=TRUE,
-                  .multicombine = TRUE, 
-                  .options.multicore = list(preschedule = FALSE)) %dopar% {
-            avgBias(comment_txt_tokens[[i]], power_bias, bv)
-        }
-
-bgloved_comments$power <- unlist(power)
+if (opt$verbose) {
+  print('Bias components calculated for each comment.')
+}
 
 # 
 # Set column names and add article id for merging
 #
 
-names(bgloved_comments) <- paste('comment_embeddings_',names(bgloved_comments), sep='')
-bgloved_comments$art_id <- bcs$art_id
-
+names(gloved_comments) <- paste0('comment_embeddings_', names(gloved_comments))
+gloved_comments$art_id <- comments$art_id
 
 # 
 # Perform clustering of comments based on word usage
 # 
 
-text_embed_cols <- names(bgloved_comments)[names(bgloved_comments) %like% '_V']
-group_clusters <- pickBestCluster(bgloved_comments[,text_embed_cols,with=F])
+text_embed_cols <- names(gloved_comments)[names(gloved_comments) %like% '_V']
+
+if (opt$verbose) {
+  print('Removing incomplete cases...')
+}
+
+mask <- complete.cases(gloved_comments)
+gloved_comments <- gloved_comments[mask,]
+
+if (opt$verbose) {
+  print('Clustering comments on word usage...')
+}
+
+ptm = proc.time()
+group_clusters <- pickBestCluster(gloved_comments[,text_embed_cols,with=F],reproducable=TRUE)
+proc.time() - ptm
+
+gloved_comments$CLUSTER <- group_clusters
+
+if (opt$verbose) {
+  print(paste0('Clustering complete. Found ', 
+               length(unique(group_clusters)),' clusters.'))
+}
 
 #
-# Merge in the comments metadata (sentiment scores, author and upvotes)
+# Add in the comments metadata (sentiment scores, author and upvotes)
 # 
 
-cols <- c(names(bcs)[names(bcs) %like% 'sent_'], 'commenter', 'upvotes', 'art_id')
-bgloved_comments <- merge(bgloved_comments, bcs[,cols, with=FALSE], by='art_id')
+cols <- c(names(comments)[names(comments) %like% 'sent_'], 'commenter', 'upvotes')
 
-# 
-# Visualize comments clusters 
-# 
-# cls <- unique(bgloved_comments$CLUSTER)
-# colors = rainbow(length(cls))
-# names(colors) = cls
-# tsne <- Rtsne(unique(bgloved_comments[,text_embed_cols, with=F],
-#               dims = 2, 
-#               perplexity=4, 
-#               verbose=TRUE, 
-#               max_iter = 500)
-# plot(rtsne$Y, t='n', main="tsne")
-# text(rtsne$Y, labels=cls, col=colors[cls])
-# 
+for(i in 1:length(cols)) {
+  set(gloved_comments, j=cols[i], value=comments[mask,cols[i],with=F])
+}
+
+if (opt$verbose) {
+  print('Comments features complete, saving progress...')
+}
+
+fwrite(gloved_comments, paste0(SOURCE,'_comments_features.csv'))
+
+if (opt$verbose) {
+  print('Done.')
+}
+
 
 #
 # Finally, merge these all together, and save out to file. 
 #
 
-bgloved <- merge(bgloved_arts, bgloved_comments, by='art_id')
-fwrite(bgloved, 'breitbart_combined_features.csv')
+gloved_comb <- merge(gloved_arts, gloved_comments, by='art_id')
+
+if (opt$verbose) {
+  print('Combined dataset created, saving to disk...')
+}
+
+fwrite(gloved_comb, paste0(SOURCE,'_combined_features.csv'))
+
+if (opt$verbose) {
+  print('Done.')
+}
+
+if (opt$verbose) {
+  print(paste0('Final dataset at ',getwd(),'/',SOURCE,'_combined_features.csv'))
+}
+
+stopImplicitCluster()
+gc()
 

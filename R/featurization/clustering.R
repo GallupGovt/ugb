@@ -19,19 +19,12 @@ runClusters <- function(dat,maxClusters=15,setClusters=1,reproducable=FALSE) {
 # 
 
     if (setClusters>1) {
-        if (reproducable) {
-            set.seed(reproducable)
-            cl <- list(kmeans(dat,setClusters,nstart=20))
-        } else {
-            cl <- foreach(x=1:10) %dopar% {
-                set.seed(x)
-                kmeans(dat,setClusters,nstart=20)
-            }
-        }
+        if (reproducable) set.seed(reproducable)
+        cl <- list(kmeans(dat,setClusters,nstart=20))
     } else {
         cl <- foreach(x=2:maxClusters, .export="runClusters", .packages=c("foreach","doParallel")) %dopar% {
             if (reproducable) set.seed(reproducable)
-            clPrime <- runClusters(dat,setClusters=x)
+            clPrime <- runClusters(dat, setClusters=x, reproducable=reproducable)
             clPrime[[which.min(unlist(lapply(clPrime,function(x) x$tot.withinss)))]]
             # kmeans(dat,x,nstart=20)
         }

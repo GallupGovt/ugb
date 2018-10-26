@@ -3,11 +3,145 @@
 # Defining and deriving biases
 # 
 
+biasComponent <- function(w1, b, metric='abs') {
+    #
+    # Calculates the projection of word w1 on the bias direction b
+    # 
+
+    if(metric == 'pos') {
+        result <- sim2(b, w1, method='cosine', norm='l2')
+    } else if(metric=='neg') {
+        result <- -sim2(b, w1, method='cosine', norm='l2')
+    } else if(metric=='abs') {
+        result <- abs(sim2(b, w1, method='cosine', norm='l2'))
+    } else {
+        print('Unknown metric')
+        return()
+    }
+    
+    return(result)
+}
+
+
+getBias <- function(tokens, bias, wv, ret=c('mean', 'list')) {
+
+    tokens <- tokens[tokens %in% rownames(wv)]
+    embeddings <- wv[tokens, , drop=FALSE]
+    embeddings <- lapply(1:nrow(embeddings), 
+                         function(x) biasComponent(embeddings[x,,drop=FALSE], 
+                                                   bias))
+    
+    if(ret=='mean') {
+        bias <- mean(unlist(embeddings))
+    } else if (ret=='list') {
+        bias <- unlist(embeddings)
+    }
+
+    return(bias)
+}
+
+
+biasDropOut <- function(axes, agg='mean') {
+    dropOutList = list()
+
+    for(i in 1:nrow(axes)) {
+        axp <- axes[-i,,drop=FALSE]
+
+        if (agg=='pca') {
+            agg_axp <- matrix(prcomp(axp)$rotation[,1],1,dim(wv)[2])
+        } else {
+            agg_axp <- matrix(colMeans(axp), 1, dim(wv)[2])
+        }
+
+        dropOutList[[i]] <- sim2(x=axp, y=agg_axp, method='cosine', norm='l2')
+    }
+
+    dropOutMat <- dropOutList[[1]]
+
+    for (i in 2:length(dropOutList)) {
+       dropOutMat <- merge(dropOutMat, dropOutList[[i]], by='row.names', all=TRUE)
+       rownames(dropOutMat) <- dropOutMat$Row.names
+       dropOutMat <- as.matrix(dropOutMat[,-1])
+       colnames(dropOutMat) <- rownames(axes)[1:i]
+    }
+
+    dr
+
+    return(dropOutMat)
+}
+
+
+biasPairDist <- function(pairs, wv, agg=c('mean','pca','none'), dropout=FALSE) {
+    axes <- lapply(pairs, function(x) wv[x[1],,drop=FALSE] - wv[x[2],,drop=FALSE])
+    axes <- do.call(rbind, axes)
+
+    if (agg != 'none') {
+        dropout = TRUE
+        if (agg=='mean') {
+            agg_bias <- matrix(colMeans(axes), 1, dim(wv)[2])
+        } else if (agg=='pca') {
+            agg_bias <- matrix(prcomp(axes)$rotation[,1],1,dim(wv)[2])
+        }
+
+        distmat <- sim2(x=axes, y=agg_bias, method='cosine', norm='l2')
+
+        if (dropout) {
+            dropout <- biasDropOut(axes, agg)
+            drop_diffs <- sweep(dropout, MARGIN=1, distmat, `-`)
+            best_drop <- which.max(colMeans(drop_diffs, na.rm=TRUE))
+        }
+
+    } else {
+            distmat <- sim2(axes, method='cosine', norm='l2')
+            dropout <- NA
+    }
+
+    dist <- list('distmat'=distmat, 'drop_out'=dropout)
+
+    if (!class(dropout)=='logical') {
+        dist$best_drop <- best_drop
+    }
+
+    return(dist)
+}
+
+
+visualizePairs <- function(pairs, wv, tsne=NULL) {
+    words <- unique(unlist(pairs))
+    colors = rainbow(length(words))
+    names(colors) = words
+
+    if(is.null(tsne)) {
+        perp <- min(c(floor(length(words)/4)-1, 50))
+
+        tsne <- Rtsne(wv[words,,drop=FALSE],
+                      dims = 2, 
+                      perplexity=perp, 
+                      verbose=TRUE, 
+                      max_iter = 5000,
+                      check_duplicates=FALSE)
+        plot(tsne$Y, t='n', main="tsne")
+        text(tsne$Y, labels=words, col=colors[words])
+    } else {
+        tsne <- Rtsne(wv,
+                      dims = 2, 
+                      perplexity=50, 
+                      verbose=TRUE, 
+                      max_iter = 500,
+                      check_duplicates=FALSE)
+        plot(tsne$Y[rownames(wv) %in% words,], t='n', main="tsne")
+        text(tsne$Y[rownames(wv) %in% words,], labels=words, col=colors[words])
+    }
+
+}
+
+
 genderPairs <- list(c('she','he'), c('her','his'), c('woman','man'),
-                c('herself','himself'), c('daughter','son'), 
-                c('mother','father'), c('girl','boy'), c('female','male'))
+                c('herself','himself'), c('women','men'), c('mary','john'),
+                c('mother','father'), c('girl','boy'), c('gal','guy'))
 
 gender_words <- unlist(genderPairs)
+
 
 white_names <- c('Adam', 'Chip', 'Harry', 'Josh', 'Roger', 'Alan', 'Frank',
     'Ian', 'Justin', 'Ryan', 'Andrew', 'Fred', 'Jack', 'Matthew', 'Stephen',
@@ -30,37 +164,18 @@ black_names <- c('Alonzo', 'Jamel', 'Lerone', 'Percell', 'Theo', 'Alphonse',
     'Leroy', 'Rasheed', 'Tremayne', 'Aisha', 'Ebony', 'Keisha',
     'Kenya', 'Tamika')
 
-racePairs <- list(c('Ebony','Ellen'), c('Lakisha','Jonathan'), c('Temeka','Jack'),
-                c('Everol','Josh'), c('Lavon','Roger'), c('Teretha','Craig'), 
-                c('Bobbie-Sue','Aisha'), c('Marcellus','Alan'), c('Rasheed','Nancy'), 
-                c('Malik','Adam'), c('Terrence','Chip'), c('Tia','Hank'), 
-                c('Kareem','Peter'), c('Tyrone','Harry'), c('Terryl','Frank'), 
-                c('Jamal','Donna'), c('Keisha','Megan'), c('Tawanda','Kristin'), 
-                c('Deion','Fred'), c('Lamar','Ian'), c('Tvree','Andrew'), 
-                c('Latisha','Todd'), c('Tremayne','Emily'), c('Jermaine','Sue-Ellen'), 
-                c('Rashaun','Ryan'), c('Lionel','Justin'), c('Lashelle','Greg'), 
-                c('Lamont','Matthew'), c('Tamika','Wendy'), c('Yvette','Stephanie'), 
-                c('Shavonn','Betsy'), c('Nichelle','Jed'), c('Latonya','Courtney'), 
-                c('Wardell','Stephen'), c('Lashandra','Meredith'), c('Tanisha','Melanie'), 
-                c('Leroy','Colleen'), c('Kenya','Rachel'), c('Darnell','Jay'), 
-                c('Yolanda','Geoffrey'), c('Hakim','Neil'), c('Rasaan','Wilbur'), 
-                c('Theo','Brad'), c('Alphonse','Paul'), c('Torrance','Amanda'), 
-                c('Aiesha','Heather'), c('Jerome','Brandon'), c('Tashika','Brendan'), 
-                c('Percell','Amber'), c('Malika','Anne'), c('Latoya','Brett'), 
-                c('Sharise','Allison'), c('Lerone','Sara'), c('Jasmine','Lauren'), 
-                c('Shereen','Crystal'), c('Shanise','Peggy'), c('Tameisha','Shannon'), 
-                c('Shaniqua','Katie'))
-
 #
 # Unfortunately many names (mostly "black" names) did not occur in the Breitbart corpus, 
-# so this bias component must be derived slightly differently. Here we take a basket of
-# terms and compute the first principle component of the entire basket. 
+# so we have to reduce the overall number of pairs. 
 # 
 
-adj_race_names <- unlist(racePairs)
-adj_race_names <- adj_race_names[tolower(adj_race_names) %in% rownames(bv)]
-adj_race_names <- c(sample(adj_race_names[adj_race_names %in% white_names],length(adj_race_names[adj_race_names %in% black_names])),
-                    adj_race_names[adj_race_names %in% black_names])
+adj_black_names <- black_names[tolower(black_names) %in% rownames(wv)]
+adj_white_names <- sample(white_names, length(adj_black_names))
+adj_racePairs <- lapply(1:length(adj_black_names), 
+                        function(x) tolower(c(adj_black_names[x], adj_white_names[x])))
+
+adj_race_names <- unlist(adj_racePairs)
+
 
 powerPairs <- list(c('feel','think'), c('original', 'reliable'), 
     c('tender','tough'), c('touching','convincing'), c('curious','accepting'), 
