@@ -8,5 +8,6 @@ articles.zip
 comments.zip
 config.py
 
-# hlm data files
+# hlm files
 hlm/*.csv
+hlm/*.pdf

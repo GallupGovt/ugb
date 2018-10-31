@@ -65,8 +65,7 @@ build_scores <- function(n = 500) {
                              low_vals = los,
                              high_vals = his
         )
-        names(results)[i] <- paste(c('z', sample(x = c(letters, 0:9), size = 6)),
-                                     collapse = '')
+        names(results)[i] <- paste0('z', i)
         print(paste('Finished iteration', i, 'of', n))
     }
     return(results)

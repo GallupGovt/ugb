@@ -1,7 +1,7 @@
 beautifulsoup4==4.6.0
 elasticsearch==6.2.0
 pandas==0.23.0
-requests==2.19.1
+requests==2.20.0
 selenium=3.14.0=py37hfa6e2cd_0
 cachetools==2.1.0
 google-api-python-client==1.7.4
