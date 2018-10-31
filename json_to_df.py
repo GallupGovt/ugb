@@ -1,17 +1,12 @@
-
 import argparse
 import json
 import os
 
-
 import pandas as pd
-
 
 from unidecode import unidecode
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-# DIR = 'W:/DARPA_UGB/CONSULTING/MR/2018/Data/BLM/PROCESSED/PARSED/2nd_iteration'
-# SOURCE = 'guardian'
 
 def getSentiment(df, field, analyzer):
     l = lambda x: pd.Series(analyzer.polarity_scores(x))
@@ -23,23 +18,23 @@ def getSentiment(df, field, analyzer):
 
 
 def run(args_dict):
-    # 
+    #
     # Loop through raw UGB JSON files and pull out text and metadata
     # for analysis.
-    # 
+    #
 
     SOURCE = args_dict['source']
     DIR = args_dict['directory']
     verbose = args_dict['verbose']
 
-    files = [file for file in os.listdir(DIR) if 
+    files = [file for file in os.listdir(DIR) if
                 ('json' in file and SOURCE in file)]
     comments = []
     arts = []
 
     #
     # Process all articles and comments into lists of tuples
-    # 
+    #
 
     for file in files:
         file = open('{}/{}'.format(DIR, file), 'r')
@@ -53,7 +48,7 @@ def run(args_dict):
                 art_cmts = article['parsed_comments']
                 art_txt = article['fulltext']
 
-                arts = arts + [(date, 
+                arts = arts + [(date,
                                 art_id,
                                 title,
                                 auth,
@@ -61,14 +56,14 @@ def run(args_dict):
                                 art_txt)]
 
                 comments = comments + [(art_id,
-                                        cmt['commenter_id'], 
-                                        cmt['comment_reply_to_id'], 
-                                        cmt['comment'], 
+                                        cmt['commenter_id'],
+                                        cmt['comment_reply_to_id'],
+                                        cmt['comment'],
                                         cmt['upvotes']) for cmt in art_cmts]
 
     #
     # Convert lists of tuples to DataFrames
-    # 
+    #
 
     comments = pd.DataFrame(comments)
     comments.columns = ['art_id',
@@ -87,7 +82,7 @@ def run(args_dict):
 
     #
     # Transliterate Unicode characters to ASCII for more coherent and
-    # predictable analyis later in R. 
+    # predictable analyis later in R.
     #
 
     arts.art_text = arts.art_text.apply(lambda x: unidecode(x))
@@ -95,7 +90,7 @@ def run(args_dict):
 
     #
     # Perform VADER Sentiment Analysis on article titles, text, and comment text
-    # 
+    #
 
     analyzer = SentimentIntensityAnalyzer()
 
@@ -106,14 +101,14 @@ def run(args_dict):
 
     #
     # Save dataframes
-    # 
+    #
 
     arts.to_csv('{}/{}_articles.csv'.format(DIR, SOURCE))
     comments.to_csv('{}/{}_comments.csv'.format(DIR, SOURCE))
 
     #
     # Save text for training embeddings separately
-    # 
+    #
 
     corpus = pd.concat([arts.art_text, comments.comment_txt])
     corpus.to_csv('{}/{}_texts.csv'.format(DIR,SOURCE))
