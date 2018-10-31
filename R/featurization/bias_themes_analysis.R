@@ -163,20 +163,7 @@ black_names <- c('Alonzo', 'Jamel', 'Lerone', 'Percell', 'Theo', 'Alphonse',
     'Tawanda', 'Yvette', 'Darnell', 'Hakim', 'Jermaine', 'Kareem', 'Jamal',
     'Leroy', 'Rasheed', 'Tremayne', 'Aisha', 'Ebony', 'Keisha',
     'Kenya', 'Tamika')
-
-#
-# Unfortunately many names (mostly "black" names) did not occur in the Breitbart corpus, 
-# so we have to reduce the overall number of pairs. 
-# 
-
-adj_black_names <- black_names[tolower(black_names) %in% rownames(wv)]
-adj_white_names <- sample(white_names, length(adj_black_names))
-adj_racePairs <- lapply(1:length(adj_black_names), 
-                        function(x) tolower(c(adj_black_names[x], adj_white_names[x])))
-
-adj_race_names <- unlist(adj_racePairs)
-
-
+    
 powerPairs <- list(c('feel','think'), c('original', 'reliable'), 
     c('tender','tough'), c('touching','convincing'), c('curious','accepting'), 
     c('unplanned','scheduled'), c('compassion','clout'), c('spontaneous','secure'), 

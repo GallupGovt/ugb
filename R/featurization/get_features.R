@@ -38,9 +38,11 @@ option_list = list(
 
 opt = parse_args(OptionParser(option_list=option_list))
 
-setwd(opt$directory)
 source("clustering.R")
 source('glove_analysis.R')
+source('bias_themes_analysis.R')
+
+setwd(opt$directory)
 
 #
 # Export packages to parallel nodes
@@ -78,8 +80,6 @@ if(!is.null(opt$word_embeddings)){
               fileEncoding='utf-8')
 }
 
-source('bias_themes_analysis.R')
-
 if (opt$verbose) {
   if (exists(opt$word_embeddings)) {
     print(paste0('Word embeddings loaded from ', opt$word_embeddings))
@@ -97,6 +97,19 @@ if (opt$verbose) {
 # 
 
 gender_bias <- deriveBias(genderPairs, wv=wv, method='pca', diag=TRUE)
+
+#
+# Unfortunately many "black" names do not occur in some corpora, 
+# so we have to reduce the overall number of pairs. 
+# 
+
+adj_black_names <- black_names[tolower(black_names) %in% rownames(wv)]
+adj_white_names <- sample(white_names, length(adj_black_names))
+adj_racePairs <- lapply(1:length(adj_black_names), 
+                        function(x) tolower(c(adj_black_names[x], adj_white_names[x])))
+
+adj_race_names <- unlist(adj_racePairs)
+
 race_bias <- deriveBias(adj_race_names, wv=wv, diag=TRUE)
 power_bias <- deriveBias(powerPairs, wv=wv, method='pca', diag=TRUE)
 

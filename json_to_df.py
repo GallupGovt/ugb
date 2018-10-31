@@ -23,11 +23,11 @@ def run(args_dict):
     # for analysis.
     #
 
-    SOURCE = args_dict['source']
+    SOURCE = args_dict['source'].lower()
     DIR = args_dict['directory']
     verbose = args_dict['verbose']
 
-    files = [file for file in os.listdir(DIR) if
+    files = [file for file in os.listdir(DIR).lower() if
                 ('json' in file and SOURCE in file)]
     comments = []
     arts = []
