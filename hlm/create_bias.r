@@ -1,4 +1,4 @@
-#!/usr/loca/bin/R
+#!/usr/local/bin/R
 # generate individual level bias scores for ugb
 # questions? contact matt_hoover@gallup.com
 
