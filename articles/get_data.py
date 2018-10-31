@@ -6,7 +6,7 @@ import sys
 
 from datetime import datetime
 
-from ugb import Scraper, Breitbart, Guardian, HuffPost, NYPost
+from ugb.articles import Scraper, Breitbart, Guardian, HuffPost, NYPost
 
 
 def choose_class(arg):
@@ -53,7 +53,8 @@ def run(args_dict):
     print('Finished gathering metadata...')
 
     # save data
-    [[m.update({'fulltext': t}) for m, t in zip(md, tx)] for md, tx in zip(metadata, text)]
+    [[m.update({'fulltext': t}) for m, t in zip(md, tx)] for md, tx in
+     zip(metadata, text)]
     data = {date: md for date, md in zip(date_range, metadata)}
 
     beg = datetime.strftime(args_dict['dates'][0], '%Y-%m-%d')
