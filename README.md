@@ -61,7 +61,36 @@ $ python index_es.py -a data articles -c data/comments comments
 ```
 
 ## Featurization
-Work in progress
+### Python pre-processing
+Pre-processing on the scraped data is run in Python, using base modules and managing file input/output with `json` and `pandas` modules. In addition, the `unidecode` and `vaderSentiment` modules are used to clean text and perform sentiment analysis, respectively. 
+
+Scraped article and comment data is initially stored in JSON files, and after pre-processing are output into CSV files for further analysis and feature extraction in R. To process articles and comments for a particular source, use the `json_to_df.py` script. This script takes three options: the directory housing the scraped JSON files, the name of the source (e.g., "breitbart" or "guardian"), and a "verbose" flag to control whether progress reports are output during execution. The script assumes that all JSON files in the given directory with the "source" string in the filename are to be included. The script loops through a list of files matching that description and compiles a Pandas DataFrame with each row representing one comment, and columns for comment features and related article features. Once the raw data has been refactored from JSON into a DataFrame, the script transliterates text fields into ASCII, and performs sentiment analysis on them, producing a set of four real numbers {pos: n, neu: n, neg: n, compound: n} characterizing the sentiment polarity and intensity of each text field. 
+
+Finally, the script saves DataFrames representing article features, comment features, and a combined corpus of article and comment text to disk as CSV files. An example call is demonstrated below:
+
+**To process articles and comments from Breitbart with verbose output**
+```
+$ python json_to_df.py -d /usr/data -s breitbart -v
+```
+
+### R featurization
+Further featurization and analysis is run in R, primarily using `data.table`, `text2vec`, and `quanteda` packages. GloVe word embeddings are trained on our text corpus, mimicking the original Stanford approach in our parameters and methods at every step; optionally, these can be loaded from a pre-trained file. Bias themes are computed, currently covering "gender," "race" and "authoritarianism" themes, and scores for all text fields are computed for each. Finally, comments are clustered on the weighted average of their word embeddings to identify "communities" of commenters differentiated by word usage patterns. 
+
+To execute this featurization, use the `get_features.R` script. This script is also run from the commandline using Rscript, and takes several arguments: the directory containing the source datasets produced by the python pre-processing, the name of the file with the articles data, the name of the file with the comments data, the name of the file with the text corpus, the name of the source being analyzed, and optionally a file with pre-trained word embeddings and a flag for verbose output.  
+
+The `get_features.R` script sources three other R files: `clustering.R`, `glove_analysis.R`, and `bias_themes_analysis.R`. These load functions for performing automated k-means cluster analysis, GloVe featurization and analysis, and functions and word sets for constructing bias theme components, respectively, which should all reside in the same directory as the main script. After loading the data and setting up parallel processing resources, the script either loads pre-trained word embeddings or uses the `quanteda` `tokens()`, `dfm()` and `fcm()` functions to tokenize and produce a feature-co-occurence matrix (FCM) from the text corpus. This model is saved to the working directory at that time for later re-use as desired.
+
+Once the GloVe model is prepared, article titles, text, and comments text are converted to weighted averages of their word embeddings. Bias theme component scores are derived similarly, taking the weighted average of the cosine similarity of all terms in a text field with each bias component vector. Sentiment scores and metadata for articles and comments (such as author, parent comment author, upvotes, and number of comments per article) are also merged in from the source datasets. 
+
+Finally, comments are assigned to clusters using k-means clustering, with values for k from 2 to 15 tested and performance rated as the between-sum-of-squares error divided by the total-sum-of-squares error. The "best fit" cluster is selected automatically based on an “elbow graph” of these performance values, defining the "elbow" point as having the maximum Euclidean distance from a straight line drawn between the points [1,0] and [15,(performance of clustering with k=15)].
+
+The resulting combined feature set with comment cluster assignments added is saved in the working directory as `$SOURCE_combined_features.csv`. An example call is demonstrated below:
+
+
+**To process articles and comments from Breitbart with verbose output**
+```
+$ Rscript get_features.R -d /usr/data -s breitbart -a articles.csv -c comments.csv -t text_corpus.csv -w embeddings_model.txt -v
+```
 
 ## Modeling
 There are two key processes for modeling, both utilizing R. The first reads in the fully featurized data, simulates a user-specificed number of bias scores, and then saves a modeling-ready dataset to disk. This process is run *by news source* and will need to be executed for each news source that is sought for modeling.
